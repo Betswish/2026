@@ -276,7 +276,7 @@ and SFT alone doesn’t consistently stabilize accuracy across Japanese/French/S
 
 Ideally, we want a solution that smooths these trade-offs while **keeping language-consistency strong**.  
 Previous studies have shown that model merging is a promising approach to combine models’ abilities,
-albeit with some performance degradation [11].
+albeit with some performance degradation [10].
 
 Here, we merged the base model with the other three SFT models using `merge-kit` with an equal linear merge.
 
