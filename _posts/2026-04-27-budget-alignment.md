@@ -35,9 +35,9 @@ toc:
 
 You ask a large language model (LLM) a math question in Japanese. It responds politely in Japanese — but behind the scenes, it’s reasoning in English/Chinese. Variables, steps, and mathematical lemmas often silently switch languages during reasoning. This behavior, where models default to English for chain-of-thought (CoT) reasoning, is more than a curiosity. It breaks instruction-following, confuses human overseers, and undermines the purpose of multilingual evaluation.
 
-The goal is clear: we want models to reason about a question in the language they are asked — not just to answer in that language. But this turns out to be harder than it sounds. Forcing models to reason in non-English languages usually leads to a drop in accuracy. Previous work shows that instructing models to reason only in the prompt language via prompting or steering improves coherence and grading alignment [1], but often comes at a steep “accuracy tax.” Even a small amount of multilingual fine-tuning helps, but doesn’t eliminate the trade-off [2]. Further, models not only prefer to reason in English — they reason *more effectively* in English. When researchers force strict in-language reasoning (e.g., in Swahili or Thai), models often lose accuracy compared to when allowed to reason in English. For higher-resource languages like French or German, this trade-off is smaller — models can reason in-language nearly as well as in English. For low-resource languages, strict enforcement harms performance more significantly.
+The goal is clear: we want models to reason about a question in the language they are asked — not just to answer in that language. But this turns out to be harder than it sounds. Forcing models to reason in non-English languages usually leads to a drop in accuracy. Previous work shows that instructing models to reason only in the prompt language via prompting or steering improves coherence and grading alignment <d-cite key="zhong2025language"></d-cite>, but often comes at a steep “accuracy tax.” Even a small amount of multilingual fine-tuning helps, but doesn’t eliminate the trade-off <d-cite key="qi-etal-2025-models"></d-cite>. Further, models not only prefer to reason in English — they reason *more effectively* in English. When researchers force strict in-language reasoning (e.g., in Swahili or Thai), models often lose accuracy compared to when allowed to reason in English. For higher-resource languages like French or German, this trade-off is smaller — models can reason in-language nearly as well as in English. For low-resource languages, strict enforcement harms performance more significantly.
 
-Why do models switch to English in the first place? Much of it traces back to training. Most reasoning data are in English. Fine-tuning even strong multilingual models on English CoT data often leads them to adopt English as their “internal language of logic.” Yong et al. (2025) observe a “quote-and-think” behavior [3], where models copy input phrases in the prompt language, but explain everything in English [4]. The model understands the question in the non-English language — it just prefers to reason in English.
+Why do models switch to English in the first place? Much of it traces back to training. Most reasoning data are in English. Fine-tuning even strong multilingual models on English CoT data often leads them to adopt English as their “internal language of logic.” Yong et al. (2025) observe a “quote-and-think” behavior <d-cite key="yong2025crosslingual"></d-cite>, where models copy input phrases in the prompt language, but explain everything in English <d-cite key="kim2025one"></d-cite>. The model understands the question in the non-English language — it just prefers to reason in English.
 
 Our technical goal is simple: **stop the switching without paying an accuracy tax** — ideally, push the Pareto frontier of *(Accuracy, Language-consistency)*.  
 And we want this post to serve as a practical guide with lessons learned along the way.  
@@ -51,13 +51,13 @@ Code, data, and checkpoints will be linked in the **camera-ready** version of th
 🔧 **Base model.** `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B`, a large reasoning model distilled from R1 through supervised fine-tuning on its reasoning traces, exhibiting an English/Chinese-dominant prior.
 
 **Step 1 — Small SFT to teach in-language reasoning.**  
-We fine-tune on **817 curated multilingual reasoning chains** (from LiMO [5]). This supervision data contains high-quality reasoning data matching R1 long-form reasoning *style*. No Reinforcement Learning (RL) here — just teach the policy to keep reasoning in the user’s query language.
+We fine-tune on **817 curated multilingual reasoning chains** (from LiMO <d-cite key="ye2025limo"></d-cite>). This supervision data contains high-quality reasoning data matching R1 long-form reasoning *style*. No Reinforcement Learning (RL) here — just teach the policy to keep reasoning in the user’s query language.
 
 **Step 2 — Math-only GRPO to push accuracy while retaining reasoning language.**  
-We run an RLVR-style GRPO with no KL, higher clip of 0.28 vs −0.2 (DAPO-like [6]), rollout 24, LoRA r = 8, LR = 1e-5, **only on a Math-500 set translated to each language**.  
+We run an RLVR-style GRPO with no KL, higher clip of 0.28 vs −0.2 (DAPO-like <d-cite key="yu2025dapo"></d-cite>), rollout 24, LoRA r = 8, LR = 1e-5, **only on a Math-500 set translated to each language**.  
 Intuition: let RL optimize hard cases and verification behaviors, while the high clip reduces catastrophic reasoning style collapse back to English.
 
-We set the verifiable rewards as **1.0 for accuracy, 0.2 for language consistency of reasoning traces, and 0.2 for answer format** [7].
+We set the verifiable rewards as **1.0 for accuracy, 0.2 for language consistency of reasoning traces, and 0.2 for answer format** <d-cite key="rastogi2025magistral"></d-cite>.
 
 📊 **Evaluation.**
 
@@ -69,13 +69,13 @@ The first two are in-domain: MMLU-Math is similar to the training data in terms 
 The other two are out-of-domain: GPQA covers hard science questions, and MMLU Pro Medicine is made up of hard questions in the medical domain.
 
 **Regimes tested:**  
-- Base → `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B`  
+- Base → `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` <d-cite key="deepseekai2025deepseekr1distillqwen7b"></d-cite> 
 - SFT on top of Base  
 - GRPO-from-Base  
 - GRPO-from-SFT
 
 **Metrics:**  
-- `pass@k(1,5,10)` where `n = 32` for accuracy [8]  
+- `pass@k(1,5,10)` where `n = 32` for accuracy
 - `Language-consistency %` (both reasoning traces **and** final answers must be in the requested language; script-aware checks)
 
 **How we score language consistency:**  
@@ -105,11 +105,11 @@ We report the % across the set.
 
 **Figure 1.a) Performance comparison overall across methods**
 
-![Figure 1.a) Performance comparison overall across methods](/assets/img/2026-04-27-budget-alignment/1a.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/1a.png" class="img-fluid" %}
 
 **Figure 1.b) Overall language consistency rate comparison across methods**
 
-![Figure 1.b) Overall language consistency rate comparison across methods](/assets/img/2026-04-27-budget-alignment/1b.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/1b.png" class="img-fluid" %}
 
 ---
 
@@ -124,9 +124,9 @@ The language consistency rates averaged across all datasets are shown in Fig. RQ
 **Interpretation.**  
 A few hundred **high-quality chains** are enough to overwrite the English/Chinese inner-monologue priority to other languages. Japanese remains stubborn — see RQ5.
 
-> Recall that instruction-following does not only mean the answer in the prompt language, but it should also ensure that the language of the reasoning traces is the same as the user’s preference to enhance their trustworthiness. SFT alone solves most of the language mismatch with limited accuracy improvements, which are yet lower than the accuracy of reasoning in English (i.e., the gray dashes in Figure 1.a above) in most cases. We provide more details in the next section.
+> Recall that instruction-following does not only mean the answer in the prompt language, but it should also ensure that the language of the reasoning traces is the same as the user's preference to enhance their trustworthiness. SFT alone solves most of the language mismatch with limited accuracy improvements, which are yet lower than the accuracy of reasoning in English (i.e., the gray dashes in Figure 1.a above) in most cases. We provide more details in the next section.
 
-![Fig. RQ0: Language consistency rates averaged across datasets](/assets/img/2026-04-27-budget-alignment/r0.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r0.png" class="img-fluid" %}
 
 ---
 
@@ -157,7 +157,7 @@ On OOD, SFT can over-narrate or change prior most probable token paths since the
 If your target is **language consistency/reasoning style + some accuracy**, SFT alone is cost-effective in-domain.  
 If you also need robustness on hard and/or OOD sets, doing an **RL top-up could be helpful.**
 
-![Fig. RQ1: Δ pass@10 for Base vs SFT](/assets/img/2026-04-27-budget-alignment/r1.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r1.png" class="img-fluid" %}
 
 ---
 
@@ -196,9 +196,9 @@ Although improvements on AIME-FR/ES and GPQA-ES are marginal, they still indicat
 GRPO learns verification/search habits that generalize: language consistency, math reasoning styles, re-checking numeric steps, and tighter answer boxing.  
 Those help **GPQA and AIME**.  
 But medicine needs domain lexicon, evidence phrasing, and calibrated claims — **absent in math RL**.  
-Previous works have shown reasoning-only post-training harms performance on downstream instruction-following and knowledge recall tasks [9].
+Previous works have shown reasoning-only post-training harms performance on downstream instruction-following and knowledge recall tasks <d-cite key="aggarwal2025optimalthinkingbench"></d-cite>.
 
-![Fig. RQ2: GRPO-SFT − SFT accuracy deltas across datasets](/assets/img/2026-04-27-budget-alignment/r2.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r2.png" class="img-fluid" %}
 
 ---
 
@@ -226,7 +226,7 @@ That can make a few out-of-domain slices look better, but it also increases vari
 **Practical rule.**  
 If you care about following (see Figure 1.b) **and** better in-domain accuracy, **do GRPO after SFT.**
 
-![Fig. RQ3: GRPO-from-Base vs GRPO-from-SFT](/assets/img/2026-04-27-budget-alignment/r3.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r3.png" class="img-fluid" %}
 
 ---
 
@@ -248,7 +248,7 @@ Then, inspect bar/line panels per dataset and language.
 
 - **Non-frontier holdouts:** Pro-Med FR/JA and AIME-ES, where domain/reward mismatch persists.
 
-![Fig. RQ4: Accuracy–Following Pareto frontier across regimes](/assets/img/2026-04-27-budget-alignment/r4.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r4.png" class="img-fluid" %}
 
 **Bottom line.**  
 Read each plot within the same language marker (Japanese ▲, French ■, Spanish ●) and compare colors:
@@ -276,17 +276,17 @@ and SFT alone doesn’t consistently stabilize accuracy across Japanese/French/S
 
 Ideally, we want a solution that smooths these trade-offs while **keeping language-consistency strong**.  
 Previous studies have shown that model merging is a promising approach to combine models’ abilities,
-albeit with some performance degradation [10].
+albeit with some performance degradation <d-cite key="ustun-etal-2024-aya"></d-cite>.
 
 Here, we merged the base model with the other three SFT models using `merge-kit` with an equal linear merge.
 
 > The merged approach is quite promising as a one-stop solution!
 
-![Fig. 5b: Illustration of merge setup and intuition](/assets/img/2026-04-27-budget-alignment/5b.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r5b.png" class="img-fluid" %}
 
 ### Result (avg pattern across datasets)
 
-![Fig. 5a: Average performance patterns for MERGE vs other regimes](/assets/img/2026-04-27-budget-alignment/5a.png)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r5a.png" class="img-fluid" %}
 
 **MERGE consistently shrinks worst-case losses and raises floor performance**, especially where SFT/GRPO dip.  
 On Pro Medicine, MERGE recovers large chunks of accuracy for Japanese/French  
