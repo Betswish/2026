@@ -1,6 +1,6 @@
 ---
 layout: distill
-title: "Budget Alignment - Making Models Reason in the User's Language"
+title: "Budget Alignment: Making Models Reason in the User's Language"
 description: "We explore a two step multilingual alignment recipe for large language models to keep reasoning and answers in the user language while preserving accuracy."
 date: 2026-04-27
 future: true
@@ -241,8 +241,7 @@ Then, inspect bar/line panels per dataset and language.
 - **SFT shifts points up** (Following ↑).  
   On some hard sets, accuracy dips slightly.
 
-- **GRPO-SFT shifts rightward** (Accuracy ↑) with at most a small upward loss, compared with SFT-only —  
-  **creating new frontiers on:**
+- **GRPO-SFT shifts rightward** (Accuracy ↑) with at most a small upward loss, compared with SFT-only — **creating new frontiers on:**
   - **MMLU-Math (JA/FR/ES):** both metrics are high.  
   - **GPQA-ES:** strong frontier point.
 
@@ -258,8 +257,7 @@ Read each plot within the same language marker (Japanese ▲, French ■, Spanis
 
 Under this pairing:
 
-> **GRPO-from-SFT (yellow) strictly Pareto-dominates Base (blue) in 9 of 12 language–dataset pairs**  
-> (higher on both accuracy and following).
+> **GRPO-from-SFT (yellow) strictly Pareto-dominates Base (blue) in 9 of 12 language–dataset pairs** (higher on both accuracy and following).
 
 In the remaining pairs, yellow usually raises following but gives up a little accuracy —  
 i.e., a mixed trade-off rather than a strict Pareto gain.
@@ -282,9 +280,8 @@ Here, we merged the base model with the other three SFT models using `merge-kit`
 
 > The merged approach is quite promising as a one-stop solution!
 
-{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r5b.png" class="img-fluid" %}
-
 ### Result (avg pattern across datasets)
+{% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r5b.png" class="img-fluid" %}
 
 {% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r5a.png" class="img-fluid" %}
 
@@ -293,8 +290,7 @@ On Pro Medicine, MERGE recovers large chunks of accuracy for Japanese/French
 (e.g., JA pass@10 climbs from SFT/GRPO’s ~47–58% to ~70%; FR from ~47–70% to ~76%),  
 while staying competitive on AIME/GPQA and within a few points of GRPO+SFT on MMLU-Math.
 
-In Spanish, where SFT already leads on Medicine, MERGE lands in the middle of Base vs SFT/GRPO+SFT  
-rather than decreasing performance to Base.
+In Spanish, where SFT already leads on Medicine, MERGE lands in the middle of Base vs SFT/GRPO+SFT rather than decreasing performance to Base.
 
 Overall, it trades a small slice of peak scores for **lower variance across languages and tasks.**
 
@@ -327,8 +323,7 @@ AIME-FR pass@1 **22.2 → 27.3**, pass@10 **46.3 → 48.2**), indicating Japanes
 Spanish on AIME shows the opposite tension: the **Base** model scores well because it always reasons in English despite Spanish prompts, while **SFT+GRPO enforces Spanish chains and accuracy drops**.  
 
 In Pro-Medicine, **math-only GRPO from SFT causes regression** (e.g.,  
-FR pass@10 **70.1 → 46.6**, ES **86.6 → 76.6**, JA **75.9 → 58.3**),  
-whereas GRPO started from Base hurts less.
+FR pass@10 **70.1 → 46.6**, ES **86.6 → 76.6**, JA **75.9 → 58.3**), whereas GRPO started from Base hurts less.
 
 ### Mechanisms
 
@@ -344,24 +339,23 @@ whereas GRPO started from Base hurts less.
 3. **Cue misalignment in Spanish math.**  
    AIME leans on algebra/number-theory “recipes” the model learned primarily in English  
    (phrases like “let x be,” “gcd,” “mod”).  
-   Spanish equivalents (“sea x,” “mcd,” “módulo”) are rarer, longer, more accented →  
-   model drifts into slower or incorrect approaches mid-solution.
+   Spanish equivalents (“sea x,” “mcd,” “módulo”) are rarer, longer, more accented \
+   → model drifts into slower or incorrect approaches mid-solution.
 
 4. **Reward misspecification in medicine.**  
-   Math-only RL optimizes numeric correctness, **not** biomedical recall, calibration, or evidence style.  
-   The policy over-indexes math heuristics and becomes **over-assertive** on clinical QA.
+   Math-only RL optimizes numeric correctness, **not** biomedical recall, calibration, or evidence style. The policy over-indexes math heuristics and becomes **over-assertive** on clinical QA.
 
 5. **Starting-point effect.**  
    RL from SFT pushes the policy toward SFT’s language/style anchors and away from neutral reasoning.  
-   On medicine, this causes bigger drops.  
-   RL from Base is more neutral; regressions are smaller.
+   On medicine, this causes bigger drops. RL from Base is more neutral; regressions are smaller.
 
 ### Lightweight fixes that may work across cases
 
 - **Prompt-level normalization (before more training).**
 
   - *Japanese:* unify to half-width digits/decimals/exp notation; no thousand separators;  
-    explicit math chain template in Japanese.  
+    explicit math chain template in Japanese. \
+    Example: `数字は半角… SI を使用し…`.  
 
   - *Spanish:* prefer `gcd / lcm / mod`, exponent notation, half-width digits;  
     terse step headers (`Definimos / Sustituimos / Comprobación / Respuesta`).
@@ -403,7 +397,7 @@ Japanese/Spanish math suffers from tokenization and cue issues; medicine suffers
 2. **If you can afford two steps, do SFT → GRPO-SFT.**  
    Use **high clip / no KL**; keep rollouts moderate; verify you haven’t regressed following.
 
-3. A practical and computationally efficient approach is **model merging among SFT’d models**.
+3. A practical and computationally efficient approach is **model merging among SFT models**.
 
 4. **For medicine or other narrative-dense domains, add a tiny domain reward with in-domain data or a dozens-scale domain SFT.**
 
