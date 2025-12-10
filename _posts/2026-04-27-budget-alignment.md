@@ -26,11 +26,6 @@ toc:
   - name: "Limitations and threats to validity"
 ---
 
-
-# Budget Alignment: Making Models Reason in the User’s Language
-
-*Please read this as a late-stage work in progress shared in a “lab meeting” spirit to help and motivate parallel research.*
-
 ## Introduction
 
 You ask a large language model (LLM) a math question in Japanese. It responds politely in Japanese — but behind the scenes, it’s reasoning in English/Chinese. Variables, steps, and mathematical lemmas often silently switch languages during reasoning. This behavior, where models default to English for chain-of-thought (CoT) reasoning, is more than a curiosity. It breaks instruction-following, confuses human overseers, and undermines the purpose of multilingual evaluation.
