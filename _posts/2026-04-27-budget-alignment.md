@@ -21,6 +21,7 @@ toc:
   - name: "RQ3 — Where should RL start from - Base or SFT?"
   - name: "RQ4 — Can we push the Pareto frontier instead of trading accuracy for language consistency?"
   - name: "RQ5 — Does model merging help?"
+  - name: "Post-review update — LLM-as-judge audit of reasoning-chain quality"
   - name: "Discussion - Where performance regresses, and potential solutions"
   - name: "Blog Summary - Practical takeaways"
   - name: "Limitations and threats to validity"
@@ -38,6 +39,8 @@ Why do models switch to English in the first place? Much of it traces back to tr
 
 Our technical goal is simple: **stop the switching without paying an accuracy tax** — ideally, push the Pareto frontier of *(Accuracy, Language-consistency)*.  
 And we want this post to serve as a practical guide with lessons learned along the way.  
+
+One scope note matters for everything that follows: in this work, **math is a proxy task for reasoning behavior**. We are not claiming that multilingual math benchmarks alone capture all real-world reasoning. We use math because answers are verifiable and errors are easy to localize, which makes it a clean testbed for studying whether language-aligned reasoning helps or hurts reasoning quality. We then stress-test transfer on science and medicine to see where this proxy stops being sufficient.
 
 Code, data, and checkpoints will be linked in the **camera-ready** version of this post to preserve anonymity during review.
 
@@ -58,12 +61,9 @@ We set the verifiable rewards as **1.0 for accuracy, 0.2 for language consistenc
 
 📊 **Evaluation.**
 
-We tried our approach on three different languages: **Japanese (JA) / French (FR) / Spanish (ES)**
+We evaluate across three target languages — **Japanese (JA), French (FR), and Spanish (ES)** — and four benchmarks: **MMLU College Math (MMLU Math), AIME25, GPQA, and MMLU Pro Medicine (MMLU Med)**.
 
-And tested on multiple datasets: **MMLU College Math (MMLU Math), AIME25, GPQA, MMLU Pro Medicine (MMLU Med)**
-
-The first two are in-domain: MMLU-Math is similar to the training data in terms of hardness, while AIME25 is harder.  
-The other two are out-of-domain: GPQA covers hard science questions, and MMLU Pro Medicine is made up of hard questions in the medical domain.
+MMLU-Math and AIME are our main in-domain reasoning probes. This is intentional: we treat math as a controlled proxy for reasoning quality because verification is straightforward. GPQA and MMLU-Med are included as out-of-domain checks to measure how far the learned reasoning behavior transfers once the task is no longer "clean math."
 
 **Regimes tested:**  
 - Base → `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` <d-cite key="deepseekai2025deepseekr1distillqwen7b"></d-cite> 
@@ -82,23 +82,15 @@ We report the % across the set.
 
 ---
 
-## 🔑 Key contributions
+## Key contributions
 
-1. **Small SFT reprograms inner monologue.**  
-   With only **817 chains**, language consistency rises near the ceiling in French/Spanish across datasets and substantially in Japanese (Fig. RQ0).
+The first takeaway is that a surprisingly small amount of high-quality multilingual supervision can re-shape how a reasoning model "talks to itself." With only **817 SFT chains**, language consistency moves close to saturation in French and Spanish, and improves substantially in Japanese.
 
-2. **Two-step recipe Pareto-improves.**  
-   SFT secures language consistency; **GRPO-SFT recovers/boosts accuracy on tough sets** (AIME/GPQA) without reverting to English (Figs. RQ1–RQ4).
+The second takeaway is that the two-step pipeline behaves like a practical Pareto recipe. SFT gives us the language behavior we want, and GRPO on top of SFT recovers or improves accuracy on harder settings such as AIME and GPQA without broadly collapsing back to English reasoning.
 
-3. **Diagnose regressions and actionable fixes.**  
-   Regressions stem from:
-   - Japanese tokenization/numeric friction,  
-   - Spanish cue misalignment,  
-   - medicine reward/style mismatch.  
-   Tokenizer-aware normalization, small Japanese/Spanish SFT top-ups, and multi-objective GRPO (with optional model merging) could recover accuracy without sacrificing in-language reasoning.
+The third takeaway is diagnostic: when the pipeline fails, it usually fails in predictable ways. Japanese shows tokenization and numeric-format friction, Spanish AIME can hit cue mismatch with English-dominant math priors, and medicine highlights reward mismatch when RL is trained on math alone. These are not mysterious failures; they suggest concrete next moves such as tokenizer-aware normalization, small targeted SFT top-ups, and multi-objective RL.
 
-4. **TL; DR.** You can briefly see our main results from the two figures below:  
-   Starting from an EN/ZH-dominant reasoning prior, small multilingual SFT is the most cost-effective way to “steer” in-language chains of reasoning. Adding math-only GRPO then recovers or improves accuracy on hard sets like AIME and GPQA while mostly preserving SFT’s language consistency discipline — pushing the Accuracy × Following frontier in many language–dataset pairs. The two pain points, Japanese (tokenization/numeric friction) and medicine (reward/style mismatch), are expected from the base prior and training signal, and both have potential straightforward fixes with light domain augmentation. And surprisingly, model merging can be very useful and effective.
+In short, starting from an EN/ZH-heavy prior, small multilingual SFT is the most cost-effective way we found to steer in-language reasoning. GRPO then helps reclaim the difficult reasoning cases, and model merging offers a useful robustness dial when we care more about stability than peak scores.
 
 **Figure 1.a) Performance comparison overall across methods**
 
@@ -130,6 +122,8 @@ A few hundred **high-quality chains** are enough to overwrite the English/Chines
 ## RQ1 — Does SFT help accuracy, or only language reasoning *style*?
 
 We have shown that **SFT significantly improves language consistency rates**, but how about the accuracy?
+
+Because our training signal is math-heavy, this section should be read as: does SFT improve performance on a **reasoning proxy** and what does that imply about transfer beyond that proxy?
 
 **Design.**  
 Compare the accuracy **Base vs SFT** on `pass@k` per dataset–language  
@@ -194,6 +188,8 @@ GRPO learns verification/search habits that generalize: language consistency, ma
 Those help **GPQA and AIME**.  
 But medicine needs domain lexicon, evidence phrasing, and calibrated claims — **absent in math RL**.  
 Previous works have shown reasoning-only post-training harms performance on downstream instruction-following and knowledge recall tasks <d-cite key="aggarwal2025optimalthinkingbench"></d-cite>.
+
+Put differently, this is exactly where the "math as proxy" framing becomes visible: proxy gains are real, but they do not automatically import the domain knowledge and calibration style required in clinical QA.
 
 {% include figure.liquid path="assets/img/2026-04-27-budget-alignment/r2.png" class="img-fluid" %}
 
@@ -311,6 +307,45 @@ When you need:
 
 ---
 
+## Post-review update — LLM-as-judge audit of reasoning-chain quality
+
+During review, we were asked to directly audit the quality of reasoning chains for grammar, language matching, and fluency. To answer that carefully, we ran an additional LLM-as-judge evaluation over the full multilingual AIME generations used in this post.
+
+This audit should be interpreted in the same scope as the main experiments: it measures language quality on reasoning traces produced in a math-proxy setting, not a full-domain linguistic evaluation across every downstream task.
+
+We evaluated **9,600 reasoning traces** in total: 10 JSON files (FR Base+GRPO, FR SFT+GRPO, ES Base+GRPO, ES SFT+GRPO, JA Base+GRPO, JA SFT+GRPO, and MERGE in EN/ES/FR/JA), each with 30 prompts and 32 sampled responses. For each response, we extracted the `<think>...</think>` segment when present (with a robust fallback for partially emitted tags), then scored each chain against its target language.
+
+For judging, we used `gpt-4.1-mini-2025-04-14` with strict structured output (JSON schema). The judge produced integer scores from 1-5 for `grammar_score`, `language_match_score`, and `fluency_score`, plus issue tags and a short rationale. The system instruction was:
+
+> "You are a strict multilingual linguistic quality evaluator... score each reasoning chain for language quality only... Do NOT score math correctness... Return only the JSON object that matches the schema."
+
+The run was fully scripted with resumable batching and schema validation. Final usage was `14,739,532` input tokens and `966,116` output tokens (estimated API cost: about `$7.44` under current `gpt-4.1-mini` pricing at run time).
+
+### What we found
+
+Across all 9,600 chains, averages were **3.8194 (grammar)**, **4.5025 (language match)**, and **3.6562 (fluency)**, for an overall mean of **3.9927**. So the biggest gap is not language identity, but surface quality and smoothness under long reasoning traces.
+
+At the setting-language level:
+
+| Setting | Lang | Overall | Grammar | Language-match | Fluency |
+|---|---:|---:|---:|---:|---:|
+| Base+GRPO | ES | 4.2274 | 4.0948 | 4.6677 | 3.9198 |
+| SFT+GRPO | ES | 4.2861 | 4.0917 | 4.7365 | 4.0302 |
+| Base+GRPO | FR | 4.1063 | 3.9229 | 4.5333 | 3.8625 |
+| SFT+GRPO | FR | 4.1257 | 3.9604 | 4.6115 | 3.8052 |
+| Base+GRPO | JA | 2.8687 | 2.7552 | 3.2188 | 2.6323 |
+| SFT+GRPO | JA | 3.8142 | 3.7604 | 4.1771 | 3.5052 |
+| MERGE | EN | 4.3979 | 4.1844 | 4.9062 | 4.1031 |
+| MERGE | ES | 4.2767 | 4.0833 | 4.8771 | 3.8698 |
+| MERGE | FR | 4.1576 | 3.9833 | 4.7729 | 3.7167 |
+| MERGE | JA | 3.6663 | 3.3573 | 4.5240 | 3.1177 |
+
+The pattern aligns with our main story. Moving from Base+GRPO to SFT+GRPO gives a small but consistent gain in ES (`+0.0587`) and FR (`+0.0194`) overall quality, and a much larger gain in JA (`+0.9455`). MERGE remains very strong in EN/ES/FR and improves Japanese language matching substantially relative to JA Base+GRPO, though JA fluency still trails the Latin-script languages.
+
+These judge results do not replace human evaluation, but they support the same qualitative conclusion as the accuracy/following plots: the pipeline materially improves in-language reasoning behavior, with Japanese still the clearest remaining quality bottleneck.
+
+---
+
 ## Discussion: Where performance regresses, and potential solutions
 
 **Empirical signal.**  
@@ -321,6 +356,8 @@ Spanish on AIME shows the opposite tension: the **Base** model scores well becau
 
 In Pro-Medicine, **math-only GRPO from SFT causes regression** (e.g.,  
 FR pass@10 **70.1 → 46.6**, ES **86.6 → 76.6**, JA **75.9 → 58.3**), whereas GRPO started from Base hurts less.
+
+This is the core tension of the post in one sentence: a math-proxy objective is very good at shaping reasoning discipline, but incomplete for domain-heavy tasks unless we add domain-aware signals.
 
 ### Mechanisms
 
@@ -387,22 +424,13 @@ Japanese/Spanish math suffers from tokenization and cue issues; medicine suffers
 
 ## Blog Summary — Practical takeaways
 
-1. **If you can only afford one step, do SFT (a few hundred high-quality SFT data).**  
-   You’ll almost certainly fix language-consistency without compromising accuracy;  
-   you might also get accuracy improvements on in-domain tasks.
+If we had to distill this post into one practical recommendation, it would be this: start with small but high-quality multilingual SFT. It is the highest-leverage step for fixing reasoning-language mismatch, and it often improves in-domain accuracy at the same time.
 
-2. **If you can afford two steps, do SFT → GRPO-SFT.**  
-   Use **high clip / no KL**; keep rollouts moderate; verify you haven’t regressed following.
+When compute allows a second stage, SFT followed by GRPO is the more reliable path than RL directly from the base model. In our runs, this sequence usually preserved the multilingual reasoning policy while regaining hard-problem accuracy. If the target environment needs steadier behavior across tasks and languages rather than absolute peak numbers, model merging is a useful compromise.
 
-3. A practical and computationally efficient approach is **model merging among SFT models**.
+For teams deploying in domains like medicine, pure math rewards are not enough: add a small domain-aware signal or a compact domain SFT refresh. For Japanese and other non-Latin scripts, numeric and formatting normalization is not cosmetic; it directly affects reasoning stability. Finally, we strongly recommend tracking the full `(Accuracy, Following)` Pareto view, because single metrics can hide exactly the trade-offs this work is trying to solve.
 
-4. **For medicine or other narrative-dense domains, add a tiny domain reward with in-domain data or a dozens-scale domain SFT.**
-
-5. **For Japanese (or any non-Latin script), include numeric/style templates**  
-   and optionally patch tokenization via formatting.
-
-6. **Track Pareto, not single metrics.**  
-   Always plot *(Accuracy, Following)* together; real wins move you **up-and-right**.
+Most importantly, keep the scope explicit when reporting results: **math here is a proxy for reasoning alignment, not the final destination**. It is a useful proxy, but deployment-quality reasoning still needs domain-specific post-training and evaluation.
 
 ---
 
@@ -419,3 +447,6 @@ Japanese/Spanish math suffers from tokenization and cue issues; medicine suffers
 
 - **Language-consistency metric.**  
   Strong, script-aware, but still an automatic proxy; human raters may be stricter.
+
+- **Math as a reasoning proxy.**  
+  Much of our optimization and auditing is built around verifiable math-style reasoning. This is useful for controlled analysis, but it does not by itself guarantee equal gains in domains that depend more on retrieval, calibration, or specialized discourse norms.
